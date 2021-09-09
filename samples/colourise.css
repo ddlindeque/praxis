@@ -1,0 +1,55 @@
+html
+{
+    background-color: #1f1f1f;
+    color: white;
+    font-family: Menlo, Monaco, 'Courier New', monospace;
+}
+
+hr
+{
+    height: 1px;
+    background-color: #3a3a3a;
+    border: none;
+}
+
+span.comment
+{
+    color: #3dcc3d;
+}
+
+span.keyword
+{
+    color: #2196f3;
+}
+
+span.identifier
+{
+    color: #b6b98c;
+}
+
+span.string, span.re-char
+{
+    color: #d4804e;
+}
+
+span.re-punctuation
+{
+    color: #f5cca2;
+}
+
+span.re-operator, span.operator
+{
+    color: #deb000;
+}
+
+span.re-class, span.class
+{
+    color: #00f2ff;
+}
+
+span.error
+{
+    text-decoration-style: wavy;
+    text-decoration-line: underline;
+    text-decoration-color: red;
+}
