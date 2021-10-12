@@ -62,3 +62,12 @@ scanner @scanner processing document ignoring [whitespace, line_comment, block_c
 {
     string_begin (string_content | string_escaped)* string_end?   -> string;
 }
+
+# Write a parser
+parser @parser processing @scanner
+{
+    name1: name2 = item1 item2 item3 [left, 3];
+    name2: name3 = item4 item5 [right, 8];
+    name3: name4 = item5 item6 [none, 9];
+    name4: name5 = item6;
+}

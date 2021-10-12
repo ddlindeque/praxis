@@ -5,25 +5,33 @@ module Praxis.Colourise
 where
 
 import System.IO
-import qualified Praxis.Lexer as Lexer
+import qualified Praxis.ManualLexer as Lexer
 import Debug.Trace
 
 getTokenLocation :: Lexer.Token -> Lexer.Location
+getTokenLocation (Lexer.EOD loc) = loc
 getTokenLocation (Lexer.Identifier loc _) = loc
 getTokenLocation (Lexer.Comment loc) = loc
 getTokenLocation (Lexer.String loc _) = loc
+getTokenLocation (Lexer.Integer loc _) = loc
 getTokenLocation (Lexer.KwAnalyser loc) = loc
 getTokenLocation (Lexer.KwScanner loc) = loc
+getTokenLocation (Lexer.KwParser loc) = loc
 getTokenLocation (Lexer.KwProcessing loc) = loc
 getTokenLocation (Lexer.KwIgnoring loc) = loc
 getTokenLocation (Lexer.KwReturn loc) = loc
 getTokenLocation (Lexer.KwGoto loc) = loc
+getTokenLocation (Lexer.KwLeft loc) = loc
+getTokenLocation (Lexer.KwRight loc) = loc
+getTokenLocation (Lexer.KwNone loc) = loc
 getTokenLocation (Lexer.KwError loc) = loc
 getTokenLocation (Lexer.OpenBracket loc) = loc
 getTokenLocation (Lexer.CloseBracket loc) = loc
 getTokenLocation (Lexer.OpenCurly loc) = loc
 getTokenLocation (Lexer.CloseCurly loc) = loc
 getTokenLocation (Lexer.Comma loc) = loc
+getTokenLocation (Lexer.Colon loc) = loc
+getTokenLocation (Lexer.Equal loc) = loc
 getTokenLocation (Lexer.SemiColon loc) = loc
 getTokenLocation (Lexer.Arrow loc) = loc
 getTokenLocation (Lexer.Hat loc) = loc
@@ -58,21 +66,29 @@ getTokenLocation (Lexer.ReOr loc) = loc
 getTokenLocation (Lexer.Error loc _) = loc
 
 getTokenClass :: Lexer.Token -> String
+getTokenClass (Lexer.EOD _) = "punctuation"
 getTokenClass (Lexer.Identifier _ _) = "identifier"
 getTokenClass (Lexer.Comment _) = "comment"
 getTokenClass (Lexer.String _ _) = "string"
+getTokenClass (Lexer.Integer _ _) = "integer"
 getTokenClass (Lexer.KwAnalyser _) = "keyword"
 getTokenClass (Lexer.KwScanner _) = "keyword"
+getTokenClass (Lexer.KwParser _) = "keyword"
 getTokenClass (Lexer.KwProcessing _) = "keyword"
 getTokenClass (Lexer.KwIgnoring _) = "keyword"
 getTokenClass (Lexer.KwReturn _) = "keyword"
 getTokenClass (Lexer.KwGoto _) = "keyword"
+getTokenClass (Lexer.KwLeft _) = "keyword"
+getTokenClass (Lexer.KwRight _) = "keyword"
+getTokenClass (Lexer.KwNone _) = "keyword"
 getTokenClass (Lexer.KwError _) = "keyword"
 getTokenClass (Lexer.OpenBracket _) = "punctuation"
 getTokenClass (Lexer.CloseBracket _) = "punctuation"
 getTokenClass (Lexer.OpenCurly _) = "punctuation"
 getTokenClass (Lexer.CloseCurly _) = "punctuation"
 getTokenClass (Lexer.Comma _) = "punctuation"
+getTokenClass (Lexer.Colon _) = "punctuation"
+getTokenClass (Lexer.Equal _) = "punctuation"
 getTokenClass (Lexer.SemiColon _) = "punctuation"
 getTokenClass (Lexer.Arrow _) = "punctuation"
 getTokenClass (Lexer.Hat _) = "operator"
@@ -126,8 +142,8 @@ getTokenEndCol tkn =
     let (_, _, _, v) = getTokenLocation tkn
     in v
 
-writeHtml :: Handle -> String -> String -> Bool -> IO ()
-writeHtml handle source _ False =
+writeHtml :: Handle -> String -> String -> Bool -> Bool -> IO ()
+writeHtml handle source _ False tooltips =
     let escapeHtml ' ' = "&nbsp;"
         escapeHtml '"' = "&quot;"
         escapeHtml '\'' = "&apos;"
@@ -140,6 +156,13 @@ writeHtml handle source _ False =
         writeTokenFooter _ =
             return ()
 
+        writeHtmlString [] = return ()
+        writeHtmlString (c:cs) =
+            do
+                hPutStr handle $ escapeHtml c
+                writeHtmlString cs
+
+        -- writeHtml' :: Int -> Int -> [Token] -> String; line, col, tokens, source
         writeHtml' _ _ [] [] =
             do
                 return ()
@@ -147,7 +170,7 @@ writeHtml handle source _ False =
             do
                 hPutStr handle $ escapeHtml c
                 writeHtml'' 0 0 [] cs
-        writeHtml' _ _ [_] [] =
+        writeHtml' _ _ [_, Lexer.EOD _] [] =
             do
                 hPutStr handle "</span>"
         --writeHtml' _ _ tokens [] = trace ("tokens = " ++ (show tokens)) $ hPutStr handle "</span>"
@@ -163,10 +186,19 @@ writeHtml handle source _ False =
                     writeHtml'' (line+1) 1 tokens cs
         writeHtml' line col tokens@(tkn:tkns) source'@(c:cs)
             | line == (getTokenStartLine tkn) && col == (getTokenStartCol tkn) =
-                do
-                    hPutStr handle ("<span class=\"" ++ (getTokenClass tkn) ++ "\">")
-                    hPutStr handle $ escapeHtml c
-                    writeHtml'' line (col+1) (tkn:tkns) cs
+                case tooltips of
+                    True -> 
+                        do
+                            hPutStr handle ("<span class=\"" ++ (getTokenClass tkn) ++ "\" title=\"")
+                            writeHtmlString $ show tkn
+                            hPutStr handle "\">"
+                            hPutStr handle $ escapeHtml c
+                            writeHtml'' line (col+1) (tkn:tkns) cs
+                    False -> 
+                        do
+                            hPutStr handle ("<span class=\"" ++ (getTokenClass tkn) ++ "\">")
+                            hPutStr handle $ escapeHtml c
+                            writeHtml'' line (col+1) (tkn:tkns) cs
             | line == (getTokenEndLine tkn) && col == (getTokenEndCol tkn) =
                 do
                     hPutStr handle "</span>"
@@ -192,7 +224,7 @@ writeHtml handle source _ False =
             writeHtml'' 1 1 tokens source
             hPutStrLn handle ""
     
-writeHtml handle source stylesheet True =
+writeHtml handle source stylesheet True tooltips =
     do
         hPutStrLn handle "<!DOCTYPE html>"
         hPutStrLn handle "<html>"
@@ -201,12 +233,24 @@ writeHtml handle source stylesheet True =
         hPutStrLn handle "  </head>"
         hPutStrLn handle "  <body>"
         hPutStr handle "    "
-        writeHtml handle source "" False
+        writeHtml handle source "" False tooltips
         hPutStrLn handle "  </body>"
         hPutStrLn handle "</html>"
 
-process :: String -> String -> String -> Bool -> IO ()
-process input output stylesheet doc = --putStrLn ("Reading " ++ input ++ " and writing the colourised output to " ++ output ++ " using stylesheet " ++ stylesheet)
+process :: String -> String -> String -> Bool -> Bool -> IO ()
+process "" "" stylesheet doc tooltips =
+    do
+        source <- hGetContents stdin
+        writeHtml stdout source stylesheet doc tooltips
+process "" output stylesheet doc tooltips =
+    withFile output WriteMode $ \handle -> do
+        source <- hGetContents stdin
+        writeHtml handle source stylesheet doc tooltips
+process input "" stylesheet doc tooltips =
+    do
+        source <- readFile input
+        writeHtml stdout source stylesheet doc tooltips
+process input output stylesheet doc tooltips =
     withFile output WriteMode $ \handle -> do
         source <- readFile input
-        writeHtml handle source stylesheet doc
+        writeHtml handle source stylesheet doc tooltips

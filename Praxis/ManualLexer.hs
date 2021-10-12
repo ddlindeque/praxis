@@ -1,4 +1,4 @@
-module Praxis.Lexer
+module Praxis.ManualLexer
 (
     Location,
     Token (..),
@@ -11,21 +11,29 @@ import Debug.Trace
 type Location = (Int, Int, Int, Int)
 
 data Token = 
-      Identifier Location String
+      EOD Location
+    | Identifier Location String
     | Comment Location
     | String Location String
+    | Integer Location Int
     | KwAnalyser Location
     | KwScanner Location
+    | KwParser Location
     | KwProcessing Location
     | KwIgnoring Location
     | KwReturn Location
     | KwGoto Location
+    | KwLeft Location
+    | KwRight Location
+    | KwNone Location
     | KwError Location
     | OpenBracket Location
     | CloseBracket Location
     | OpenCurly Location
     | CloseCurly Location
     | Comma Location
+    | Colon Location
+    | Equal Location
     | SemiColon Location
     | Arrow Location
     | Hat Location
@@ -63,16 +71,20 @@ data Token =
 keyword :: Location -> String -> Token
 keyword loc "analyser" = KwAnalyser loc
 keyword loc "scanner" = KwScanner loc
+keyword loc "parser" = KwParser loc
 keyword loc "processing" = KwProcessing loc
 keyword loc "ignoring" = KwIgnoring loc
 keyword loc "return" = KwReturn loc
 keyword loc "goto" = KwGoto loc
+keyword loc "left" = KwLeft loc
+keyword loc "right" = KwRight loc
+keyword loc "none" = KwNone loc
 keyword loc "error" = KwError loc
 keyword loc ('@':value) = Identifier loc value
 keyword loc value = Identifier loc value
 
 tokenise' :: Int -> Location -> String -> String -> [Token] -- State Location CurrentTokenText Text
-tokenise' 0 _ _ [] = []
+tokenise' 0 (sline, scol, _, _) _ [] = [EOD (sline, scol, sline, scol)]
 tokenise' 0 (_, _, eline, ecol) _ (' ':xs) = tokenise'' 0 (eline, ecol+1, eline, ecol+1) "" xs
 tokenise' 0 (_, _, eline, ecol) _ ('\t':xs) = tokenise'' 0 (eline, ecol+1, eline, ecol+1) "" xs
 tokenise' 0 (_, _, eline, ecol) _ ('\n':xs) = tokenise'' 0 (eline+1, 1, eline+1, 1) "" xs
@@ -85,6 +97,8 @@ tokenise' 0 (sline, scol, eline, ecol) _ ('{':xs) = (OpenCurly (sline, scol, eli
 tokenise' 0 (sline, scol, eline, ecol) _ ('}':xs) = (CloseCurly (sline, scol, eline, ecol+1)):(tokenise'' 0 (eline, ecol+1, eline, ecol+1) "" xs)
 tokenise' 0 (sline, scol, eline, ecol) _ (',':xs) = (Comma (sline, scol, eline, ecol+1)):(tokenise'' 0 (eline, ecol+1, eline, ecol+1) "" xs)
 tokenise' 0 (sline, scol, eline, ecol) _ (';':xs) = (SemiColon (sline, scol, eline, ecol+1)):(tokenise'' 0 (eline, ecol+1, eline, ecol+1) "" xs)
+tokenise' 0 (sline, scol, eline, ecol) _ (':':xs) = (Colon (sline, scol, eline, ecol+1)):(tokenise'' 0 (eline, ecol+1, eline, ecol+1) "" xs)
+tokenise' 0 (sline, scol, eline, ecol) _ ('=':xs) = (Equal (sline, scol, eline, ecol+1)):(tokenise'' 0 (eline, ecol+1, eline, ecol+1) "" xs)
 tokenise' 0 (sline, scol, eline, ecol) _ ('^':xs) = (Hat (sline, scol, eline, ecol+1)):(tokenise'' 0 (eline, ecol+1, eline, ecol+1) "" xs)
 tokenise' 0 (sline, scol, eline, ecol) _ ('.':xs) = (Dot (sline, scol, eline, ecol+1)):(tokenise'' 0 (eline, ecol+1, eline, ecol+1) "" xs)
 tokenise' 0 (sline, scol, eline, ecol) _ ('*':xs) = (Asterisk (sline, scol, eline, ecol+1)):(tokenise'' 0 (eline, ecol+1, eline, ecol+1) "" xs)
@@ -98,6 +112,8 @@ tokenise' 0 (sline, scol, eline, ecol) _ ('"':xs) = tokenise'' 5 (sline, scol, e
 tokenise' 0 (sline, scol, eline, ecol) _ ('@':xs) = tokenise'' 4 (sline, scol, eline, ecol+1) "@" xs
 tokenise' 0 (sline, scol, eline, ecol) _ (x:xs)
     | (x>='a' && x<='z') || (x>='A' && x<='Z') || x=='_' = tokenise'' 4 (sline, scol, eline, ecol+1) [x] xs
+    | (x>='0' && x<='9') = tokenise'' 7 (sline, scol, eline, ecol+1) [x] xs
+    | otherwise = [Error (sline, scol, eline, ecol) ("Unexpected character '" ++ [x] ++ "' encountered")]
 tokenise' 1 (sline, scol, eline, ecol) _ [] = [Error (sline, scol, eline, ecol) "Unexpected end-of-data while reading a regular expression"]
 tokenise' 1 (sline, scol, eline, ecol) _ ('^':xs) = (ReHat (sline, scol, eline, ecol+1)):(tokenise'' 1 (eline, ecol+1, eline, ecol+1) "" xs)
 tokenise' 1 (sline, scol, eline, ecol) _ ('.':xs) = (ReDot (sline, scol, eline, ecol+1)):(tokenise'' 1 (eline, ecol+1, eline, ecol+1) "" xs)
@@ -147,6 +163,10 @@ tokenise' 6 (sline, scol, eline, ecol) cur ('f':xs) = tokenise'' 5 (sline, scol,
 tokenise' 6 (sline, scol, eline, ecol) cur ('v':xs) = tokenise'' 5 (sline, scol, eline, ecol+1) (cur++"\v") xs
 tokenise' 6 (sline, scol, eline, ecol) cur ('\\':xs) = tokenise'' 5 (sline, scol, eline, ecol+1) (cur++"\\\\") xs
 tokenise' 6 (sline, scol, eline, ecol) cur (x:xs) = tokenise'' 5 (sline, scol, eline, ecol+1) (cur++[x]) xs
+tokenise' 7 loc cur [] = [Integer loc (read cur)]
+tokenise' 7 (sline, scol, eline, ecol) cur (x:xs)
+    | (x>='0' && x<='9') = tokenise'' 7 (sline, scol, eline, ecol+1) (cur++[x]) xs
+    | otherwise = (Integer (sline, scol, eline, ecol) (read cur)):(tokenise'' 0 (eline, ecol, eline, ecol) "" (x:xs))
 
 --tokenise'' state loc cur [] = trace ("tokenise'' " ++ (show state) ++ " " ++ (show loc) ++ " " ++ (show cur) ++ " []") $ tokenise' state loc cur []
 --tokenise'' state loc cur text@(c:_) = trace ("tokenise'' " ++ (show state) ++ " " ++ (show loc) ++ " " ++ (show cur) ++ " " ++ (show c)) $ tokenise' state loc cur text

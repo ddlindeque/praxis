@@ -32,6 +32,11 @@ span.string, span.re-char
     color: #d4804e;
 }
 
+span.integer
+{
+    color: #c1ee90;
+}
+
 span.re-punctuation
 {
     color: #f5cca2;
